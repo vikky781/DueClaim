@@ -1,0 +1,13 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.aws-sam/
+
+# Node
+node_modules/
+dist/
+.env
+.env.local
