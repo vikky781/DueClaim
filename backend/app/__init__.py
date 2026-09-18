@@ -1,0 +1,1 @@
+"""DueClaim FastAPI application."""
