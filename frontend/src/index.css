@@ -1,0 +1,96 @@
+@import "@fontsource-variable/newsreader";
+@import "@fontsource-variable/newsreader/wght-italic.css";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "tailwindcss";
+
+/*
+  DueClaim design tokens.
+  Warm charcoal ground, paper-coloured text, a single brass accent.
+  These are the tokens the dashboard reuses; keep additions deliberate.
+*/
+@theme {
+  --color-ink: #151412;
+  --color-slate: #1e1c19;
+  --color-rule: #2d2a25;
+  --color-paper: #ece6da;
+  --color-mute: #8c8577;
+  --color-brass: #d9a441;
+  --color-brass-deep: #a9782a;
+  --color-alert: #d0654f;
+
+  --font-display: "Newsreader Variable", Georgia, "Times New Roman", serif;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --animate-rise: rise 600ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-pulse-dot: pulse-dot 1.4s ease-in-out infinite;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes pulse-dot {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+}
+
+@layer base {
+  html {
+    background-color: var(--color-ink);
+    color: var(--color-paper);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    min-height: 100dvh;
+    margin: 0;
+  }
+  ::selection {
+    background-color: var(--color-brass);
+    color: var(--color-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-brass);
+    outline-offset: 3px;
+  }
+}
+
+@utility leader {
+  /* Ledger-style dot leader between a label and its value. */
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  &::after {
+    content: "";
+    order: 1;
+    flex: 1 1 auto;
+    border-bottom: 1px dotted var(--color-mute);
+    opacity: 0.6;
+    transform: translateY(-0.3em);
+  }
+  & > :last-child {
+    order: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .animate-pulse-dot {
+    animation: none;
+  }
+}
