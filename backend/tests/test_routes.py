@@ -93,7 +93,7 @@ def test_get_invoice_includes_full_breakdown_that_reconciles(client):
     assert first["period_end"] == "2026-04-01"
     assert first["days"] == 31
     assert first["annual_rate_applied"] == "16.50"
-    assert first["opening_balance"] == "500000.00"
+    assert first["accrual_basis"] == "500000.00"
     assert first["interest_for_period"] == "7006.85"
     assert first["closing_balance"] == "507006.85"
     assert first["is_capitalised"] is True

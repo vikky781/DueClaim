@@ -52,7 +52,7 @@ class RestPeriodRead(BaseModel):
     period_end: date
     days: int
     annual_rate_applied: str
-    opening_balance: str
+    accrual_basis: str
     interest_for_period: str
     closing_balance: str
     is_capitalised: bool
@@ -128,7 +128,7 @@ def _row(p: RestPeriod) -> RestPeriodRead:
         period_end=p.period_end,
         days=p.days,
         annual_rate_applied=money(p.annual_rate_applied),
-        opening_balance=money(p.opening_balance),
+        accrual_basis=money(p.accrual_basis),
         interest_for_period=money(p.interest_for_period),
         closing_balance=money(p.closing_balance),
         is_capitalised=p.is_capitalised,
