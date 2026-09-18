@@ -1,41 +1,89 @@
 """Statutory interest engine for MSMED Act 2006, sections 15 and 16.
 
-Pure functions, no I/O, ``decimal.Decimal`` throughout. Nothing here rounds:
-callers quantize for presentation only.
+Pure functions, no I/O, ``decimal.Decimal`` throughout. Nothing in this module
+rounds or quantizes; every figure is carried at full Decimal context precision.
+Quantization to paise happens once, at the serialization boundary, via
+``dueclaim.money`` — which this module must never import.
 
-Convention implemented (fixed; tests assert it):
+REST CONVENTION (fixed; the test suite asserts each clause)
+===========================================================
 
-* **Appointed day (s.15).** Payment is due on the agreed date, but never later
-  than 45 days from the day of acceptance. ``appointed_day`` therefore returns
-  ``acceptance_date + min(agreed_credit_days or 45, 45)`` days.
-* **Accrual window.** Interest runs from the day *after* the appointed day up to
-  and including ``as_of``. ``as_of`` on or before the appointed day -> no
-  interest, ``days_overdue == 0``, empty breakdown.
-* **Monthly rests.** Rest boundaries are ``appointed_day + n months`` for
-  n = 1, 2, ... with end-of-month clamping (31 Jan + 1 month -> 28/29 Feb). The
-  anchor is always the appointed day itself, so the day-of-month never drifts
-  after a clamp (31 Jan -> 28 Feb -> 31 Mar). Period *n* covers the days
-  ``boundary[n-1] + 1 .. boundary[n]`` inclusive.
-* **Per-period interest.**
-  ``opening_balance * (3 * bank_rate_on(period_start) / 100) * (days / 365)``.
-  The denominator is always 365, including leap years.
-* **Capitalisation.** At the end of each *completed* rest period the period's
-  interest is added to the balance, and the next period opens on that larger
-  balance. The final partial period (``boundary[k] + 1 .. as_of`` when
-  ``as_of`` is not itself a boundary) accrues simple interest on the current
-  balance and is **not** capitalised.
-* **Rate change mid-period.** If the RBI Bank Rate changes strictly inside a
-  period, that period is split at the change date into segments, each earning
-  interest on the *same* opening balance at its own rate for its own day count.
-  Each segment is its own ``RestPeriod`` row. Only the last segment of a
-  completed period carries ``is_capitalised=True`` and a ``closing_balance``
-  that includes the interest of *all* segments of that period; earlier segments
-  show ``closing_balance == opening_balance``.
-* **Row semantics.** ``closing_balance`` is the balance carried into the next
-  row. It equals ``opening_balance`` for every row that does not capitalise.
-  ``sum(row.interest_for_period) == total_interest`` and
-  ``total_recoverable == principal_outstanding + total_interest`` always hold,
-  so every headline figure is traceable to the breakdown.
+1. Appointed day (s.15).
+   Payment falls due on the day agreed in writing between supplier and buyer,
+   but in no case later than 45 days from the day of acceptance (or deemed
+   acceptance) of the goods or services. ``appointed_day`` therefore returns
+   ``acceptance_date + min(agreed_credit_days or 45, 45)`` days. An agreed
+   period longer than 45 days is clamped to 45; a shorter one is honoured; no
+   agreement means 45.
+
+2. Accrual window.
+   Interest accrues from the day AFTER the appointed day, up to and including
+   ``as_of``. If ``as_of`` is on or before the appointed day there is no
+   interest: ``days_overdue == 0``, ``total_interest == 0``, empty breakdown.
+   ``days_overdue = (as_of - appointed_day).days``.
+
+3. Monthly rests, anchored to the appointed day.
+   Rest boundaries are ``appointed_day + n calendar months`` for n = 1, 2, ...
+   The anchor is ALWAYS the appointed day itself, never the previous boundary,
+   so the day-of-month does not drift after a clamp. End-of-month clamping:
+   if the anchor day does not exist in the target month, the boundary is the
+   last day of that month (31 Jan -> 28 Feb, or 29 Feb in a leap year ->
+   31 Mar). Rest period n covers the days ``boundary[n-1] + 1`` through
+   ``boundary[n]`` inclusive, where ``boundary[0]`` is the appointed day.
+
+4. Interest for a period (or segment).
+   ``interest = opening_balance * (3 * bank_rate / 100) * (days / 365)``
+   where ``bank_rate`` is the RBI Bank Rate (percent p.a.) in force on the
+   first day of the period or segment, ``3 *`` is the s.16 multiplier, and
+   ``days`` is the inclusive day count of the period or segment. The
+   denominator is always 365, including in leap years. No rounding.
+
+5. Capitalisation at completed rest boundaries only.
+   At the end of each COMPLETED rest period the period's interest is added to
+   the balance, and the next period opens on that enlarged balance. That is
+   what "compound interest with monthly rests" means here.
+
+6. Final partial period.
+   If ``as_of`` is not itself a rest boundary, the days from the last boundary
+   + 1 through ``as_of`` form a final partial period. It accrues SIMPLE
+   interest on the balance as it stood at the last boundary and is NOT
+   capitalised (``is_capitalised == False``). If ``as_of`` falls exactly on a
+   boundary, the last period is a completed one and is capitalised.
+
+7. Mid-period Bank Rate change.
+   If the RBI Bank Rate changes on a date strictly inside a rest period, the
+   period is split at the change date into consecutive day segments
+   (``start .. change-1`` and ``change .. end``). Each segment earns interest
+   on the SAME opening balance — the balance at the start of the rest period —
+   at its own rate for its own day count. There is no capitalisation at the
+   change date. The balance rolled forward at the boundary is the opening
+   balance plus the interest of ALL segments in that period. Each segment is
+   emitted as its own ``RestPeriod`` row; only the last segment of a completed
+   period carries ``is_capitalised == True``.
+
+ROW SEMANTICS (``RestPeriod``)
+==============================
+
+* ``opening_balance`` is the base on which ``interest_for_period`` was
+  computed, i.e. clause 4 can be re-derived from the row's own columns.
+* ``closing_balance == opening_balance + interest_for_period`` for EVERY row,
+  capitalised or not.
+* ``is_capitalised`` says whether that closing balance rolls forward as the
+  next row's opening balance. Within a rate-split period the segments share
+  one opening balance, so the next period opens on
+  ``opening_balance + sum(segment interests)`` rather than on the last
+  segment's ``closing_balance`` alone.
+
+RESULT INVARIANTS (``ClaimResult``)
+===================================
+
+* ``sum(row.interest_for_period) == total_interest``
+* ``total_recoverable == principal_outstanding + total_interest``
+* ``breakdown[-1].closing_balance == total_recoverable`` whenever the final
+  period is a single unsplit row (always true unless a Bank Rate change falls
+  inside the final period).
+
+Every headline figure is therefore traceable to specific rows.
 """
 
 from __future__ import annotations
@@ -123,7 +171,7 @@ def _period_rows(
                 annual_rate_applied=rate,
                 opening_balance=opening_balance,
                 interest_for_period=interest,
-                closing_balance=opening_balance + period_interest if capitalised_here else opening_balance,
+                closing_balance=opening_balance + interest,
                 is_capitalised=capitalised_here,
             )
         )

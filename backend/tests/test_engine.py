@@ -99,9 +99,9 @@ def test_partial_final_period_is_not_capitalised():
     assert partial.period_start == date(2026, 4, 2)
     assert partial.period_end == date(2026, 4, 15)
     assert partial.days == 14
-    # Simple day-count on the capitalised balance; balance does not grow.
+    # Simple day-count on the capitalised balance.
     assert partial.opening_balance == full.closing_balance
-    assert partial.closing_balance == partial.opening_balance
+    assert partial.closing_balance == partial.opening_balance + partial.interest_for_period
     expected = full.closing_balance * Decimal("16.50") / 100 * Decimal(14) / 365
     assert q(partial.interest_for_period) == q(expected)
     assert r.total_interest == full.interest_for_period + partial.interest_for_period
@@ -134,7 +134,7 @@ def test_mid_period_rate_change_splits_period_at_change_date(monkeypatch):
     assert a.annual_rate_applied == Decimal("16.50")
     assert a.is_capitalised is False
     assert a.opening_balance == Decimal("100000")
-    assert a.closing_balance == Decimal("100000")  # no capitalisation mid-period
+    assert a.closing_balance == Decimal("100000") + a.interest_for_period
     # Segment 2: 2026-03-17 .. 2026-04-01 = 16 days at 18.00%
     assert (b.period_start, b.period_end, b.days) == (date(2026, 3, 17), date(2026, 4, 1), 16)
     assert b.annual_rate_applied == Decimal("18.00")
@@ -144,7 +144,26 @@ def test_mid_period_rate_change_splits_period_at_change_date(monkeypatch):
     assert q(a.interest_for_period) == Decimal("678.08")
     assert q(b.interest_for_period) == Decimal("789.04")
     assert q(r.total_interest) == Decimal("1467.12")
-    assert q(b.closing_balance) == Decimal("101467.12")
+    assert q(a.closing_balance) == Decimal("100678.08")
+    assert q(b.closing_balance) == Decimal("100789.04")
+
+
+def test_period_after_a_rate_split_opens_on_sum_of_both_segments(monkeypatch):
+    monkeypatch.setattr(
+        rates,
+        "BANK_RATES",
+        [
+            (date(2025, 12, 6), Decimal("5.50")),
+            (date(2026, 3, 17), Decimal("6.00")),
+        ],
+    )
+    r = compute_claim(Decimal("100000"), ACCEPTED, None, as_of=date(2026, 4, 15))
+    a, b, nxt = r.breakdown
+    # Both segments accrued on the period's opening balance; the balance rolled
+    # forward is that opening balance plus the interest of BOTH segments.
+    assert nxt.opening_balance == a.opening_balance + a.interest_for_period + b.interest_for_period
+    assert q(nxt.opening_balance) == Decimal("101467.12")
+    assert nxt.annual_rate_applied == Decimal("18.00")
 
 
 def test_leap_year_february_period_has_29_days_and_anchor_day_is_kept():
@@ -170,6 +189,22 @@ def test_amount_paid_reduces_principal_before_interest_accrues():
     assert part.breakdown[0].opening_balance == Decimal("60000")
     assert q(part.total_interest) == q(unpaid.total_interest * Decimal("0.6"))
     assert part.total_recoverable == Decimal("60000") + part.total_interest
+
+
+# --- reconciliation invariants ----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "as_of",
+    [date(2026, 4, 1), date(2026, 4, 15), date(2026, 9, 1), date(2026, 9, 18)],
+)
+def test_every_row_reconciles_and_final_row_closes_at_total_recoverable(as_of):
+    r = compute_claim(Decimal("500000"), ACCEPTED, None, as_of=as_of)
+    assert r.breakdown
+    for p in r.breakdown:
+        assert p.closing_balance == p.opening_balance + p.interest_for_period
+    assert sum(p.interest_for_period for p in r.breakdown) == r.total_interest
+    assert r.breakdown[-1].closing_balance == r.total_recoverable
 
 
 # --- rates -------------------------------------------------------------------
