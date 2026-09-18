@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 
 from dueclaim.engine import ClaimResult, RestPeriod, compute_claim
@@ -192,14 +192,22 @@ def list_invoices(
     return [_read(inv, today) for inv in invoices]
 
 
+AS_OF_QUERY = Query(
+    default=None,
+    description="Compute the claim as of this date (YYYY-MM-DD) instead of today. "
+    "Passed to the engine unchanged; nothing else differs.",
+)
+
+
 @router.get("/invoices/{invoice_id}", response_model=InvoiceDetail)
 def get_invoice(
     invoice_id: str,
+    as_of: date | None = AS_OF_QUERY,
     sub: str = Depends(get_current_user_sub),
     store: Store = Depends(get_store),
     today: date = Depends(get_today),
 ) -> InvoiceDetail:
-    return _detail(_get_or_404(store, sub, invoice_id), today)
+    return _detail(_get_or_404(store, sub, invoice_id), as_of or today)
 
 
 @router.patch("/invoices/{invoice_id}", response_model=InvoiceRead)
@@ -263,11 +271,12 @@ def get_business(
 
 @router.get("/portfolio/summary", response_model=PortfolioSummary)
 def portfolio_summary(
+    as_of: date | None = AS_OF_QUERY,
     sub: str = Depends(get_current_user_sub),
     store: Store = Depends(get_store),
     today: date = Depends(get_today),
 ) -> PortfolioSummary:
-    """Aggregate claim position across all open invoices.
+    """Aggregate claim position across all open invoices, as of ``as_of`` (default today).
 
     Invoices with ``status == paid`` count toward ``invoice_count`` but are
     excluded from every accrual figure and from ``per_buyer``.
@@ -275,6 +284,7 @@ def portfolio_summary(
     total_recoverable as of today and as of tomorrow — not a rate x balance
     approximation, so it is correct across rest boundaries and rate changes.
     """
+    today = as_of or today
     invoices = store.list_invoices(sub)
     open_invoices = [i for i in invoices if i.status != InvoiceStatus.paid]
     tomorrow = today + timedelta(days=1)

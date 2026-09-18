@@ -266,3 +266,71 @@ def test_portfolio_summary_aggregates_and_flags_43bh(client):
     assert zed["interest"] == "0.00"
     assert zed["section_43bh_exposed"] is False  # corporate but not overdue
     assert body["disclaimer"] == DISCLAIMER
+
+
+# --- ?as_of= override --------------------------------------------------------
+
+
+def test_invoice_detail_as_of_flows_into_engine_unchanged(client):
+    inv_id = client.post(f"{API}/invoices", json=invoice_payload()).json()["id"]
+    r = client.get(f"{API}/invoices/{inv_id}", params={"as_of": "2026-10-18"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    expected = compute_claim(Decimal("500000"), date(2026, 1, 15), None, as_of=date(2026, 10, 18))
+    assert body["claim"]["as_of"] == "2026-10-18"
+    assert body["claim"]["days_overdue"] == expected.days_overdue == 231
+    assert body["claim"]["total_interest"] == to_paise_string(expected.total_interest)
+    assert len(body["breakdown"]) == len(expected.breakdown) == 8
+    assert body["breakdown"][-1]["period_end"] == "2026-10-18"
+
+
+def test_invoice_detail_as_of_before_appointed_day_gives_zero(client):
+    inv_id = client.post(f"{API}/invoices", json=invoice_payload()).json()["id"]
+    body = client.get(f"{API}/invoices/{inv_id}", params={"as_of": "2026-02-01"}).json()
+    assert body["claim"]["as_of"] == "2026-02-01"
+    assert body["claim"]["days_overdue"] == 0
+    assert body["claim"]["total_interest"] == "0.00"
+    assert body["breakdown"] == []
+
+
+def test_invoice_detail_without_as_of_still_uses_today(client):
+    inv_id = client.post(f"{API}/invoices", json=invoice_payload()).json()["id"]
+    assert client.get(f"{API}/invoices/{inv_id}").json()["claim"]["as_of"] == "2026-09-18"
+
+
+def test_invalid_as_of_is_422(client):
+    inv_id = client.post(f"{API}/invoices", json=invoice_payload()).json()["id"]
+    assert client.get(f"{API}/invoices/{inv_id}", params={"as_of": "18/09/2026"}).status_code == 422
+    assert client.get(f"{API}/portfolio/summary", params={"as_of": "not-a-date"}).status_code == 422
+
+
+def test_portfolio_summary_as_of_shifts_every_figure(client):
+    client.post(f"{API}/invoices", json=invoice_payload(invoice_number="A-1", amount="500000"))
+    client.post(
+        f"{API}/invoices",
+        json=invoice_payload(invoice_number="R-1", buyer_name="Ravi Traders", amount="80000",
+                             acceptance_date="2026-06-01", buyer_is_corporate=False),
+    )
+    as_of = date(2026, 12, 31)
+    body = client.get(f"{API}/portfolio/summary", params={"as_of": as_of.isoformat()}).json()
+    assert body["as_of"] == "2026-12-31"
+
+    a = compute_claim(Decimal("500000"), date(2026, 1, 15), None, as_of=as_of)
+    r = compute_claim(Decimal("80000"), date(2026, 6, 1), None, as_of=as_of)
+    assert body["total_statutory_interest"] == to_paise_string(a.total_interest + r.total_interest)
+    assert body["total_recoverable"] == to_paise_string(a.total_recoverable + r.total_recoverable)
+    # Per-day accrual is relative to the requested date, not to today.
+    nxt = as_of + timedelta(days=1)
+    delta = (
+        compute_claim(Decimal("500000"), date(2026, 1, 15), None, as_of=nxt).total_recoverable
+        + compute_claim(Decimal("80000"), date(2026, 6, 1), None, as_of=nxt).total_recoverable
+        - a.total_recoverable - r.total_recoverable
+    )
+    assert body["interest_accruing_per_day"] == to_paise_string(delta)
+    by_name = {b["buyer_name"]: b for b in body["per_buyer"]}
+    assert by_name["Acme Industries Pvt Ltd"]["oldest_days_overdue"] == a.days_overdue == 305
+    assert by_name["Ravi Traders"]["oldest_days_overdue"] == r.days_overdue
+    # Today's figures are different, proving the override took effect.
+    today_body = client.get(f"{API}/portfolio/summary").json()
+    assert today_body["as_of"] == "2026-09-18"
+    assert Decimal(today_body["total_statutory_interest"]) < Decimal(body["total_statutory_interest"])
