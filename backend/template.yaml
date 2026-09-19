@@ -131,12 +131,34 @@ Resources:
             Method: GET
             Auth:
               Authorizer: NONE
-        Api:
+        # Explicit methods rather than ANY: with ANY, OPTIONS would match this
+        # route and hit the JWT authorizer (401), so browsers' CORS preflight
+        # fails. With no OPTIONS route, API Gateway answers preflight itself
+        # from CorsConfiguration, without authorization.
+        ApiGet:
           Type: HttpApi
           Properties:
             ApiId: !Ref HttpApi
             Path: /api/{proxy+}
-            Method: ANY
+            Method: GET
+        ApiPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/{proxy+}
+            Method: POST
+        ApiPatch:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/{proxy+}
+            Method: PATCH
+        ApiDelete:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/{proxy+}
+            Method: DELETE
 
 Outputs:
   ApiUrl:
