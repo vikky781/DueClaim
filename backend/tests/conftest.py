@@ -106,3 +106,45 @@ def business_payload(**overrides) -> dict:
     }
     base.update(overrides)
     return base
+
+
+# --- uploads / OCR -------------------------------------------------------------
+
+from app.routes.uploads import get_uploads_backend  # noqa: E402
+
+
+class FakeUploads:
+    """Stands in for S3 presign + Textract. Records calls; serves a canned response per key."""
+
+    def __init__(self) -> None:
+        self.presigned: list[tuple[str, str]] = []
+        self.responses: dict[str, dict] = {}
+        self.missing: set[str] = set()
+        self.unsupported: set[str] = set()
+
+    def presign_put(self, key: str, content_type: str, expires_in: int) -> str:
+        self.presigned.append((key, content_type))
+        return f"https://fake-bucket.s3.ap-south-1.amazonaws.com/{key}?X-Amz-Signature=fake"
+
+    def analyze_expense(self, key: str) -> dict:
+        from app.routes.uploads import ObjectMissing, UnsupportedDocument
+
+        if key in self.missing:
+            raise ObjectMissing(key)
+        if key in self.unsupported:
+            raise UnsupportedDocument(key)
+        return self.responses.get(key, {"ExpenseDocuments": []})
+
+
+@pytest.fixture
+def uploads() -> FakeUploads:
+    return FakeUploads()
+
+
+@pytest.fixture
+def client_with_uploads(store: FakeStore, uploads: FakeUploads):
+    _install_overrides(store)
+    app.dependency_overrides[get_uploads_backend] = lambda: uploads
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()

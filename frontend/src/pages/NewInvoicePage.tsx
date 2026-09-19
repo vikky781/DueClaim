@@ -1,9 +1,14 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 
 import { ApiError, api } from '../api/client'
-import { Checkbox, ErrorNote, Eyebrow, Field, PrimaryButton, TextInput } from '../components/ui'
+import type { ExtractionResponse } from '../api/types'
+import { AutofillMarker, Checkbox, ErrorNote, Eyebrow, Field, PrimaryButton, TextInput } from '../components/ui'
+import UploadZone from '../components/UploadZone'
 import { validateInvoice, type InvoiceFormErrors, type InvoiceFormValues } from '../lib/validation'
+
+/** The only fields OCR is allowed to propose. acceptance_date is deliberately not one of them. */
+type AutofillField = 'invoice_number' | 'buyer_name' | 'invoice_date' | 'amount'
 
 const EMPTY: InvoiceFormValues = {
   invoice_number: '',
@@ -22,9 +27,46 @@ export default function NewInvoicePage() {
   const [errors, setErrors] = useState<InvoiceFormErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<unknown>(null)
+  /** Fields the OCR proposal filled, with Textract's confidence. Cleared per field once the user edits it. */
+  const [autofill, setAutofill] = useState<Partial<Record<AutofillField, number>>>({})
+  // Extraction resolves asynchronously; read the LATEST values then, not the
+  // snapshot from the render that started the upload, so nothing typed
+  // meanwhile is overwritten.
+  const latest = useRef({ values, autofill })
+  useEffect(() => {
+    latest.current = { values, autofill }
+  }, [values, autofill])
 
-  const set = <K extends keyof InvoiceFormValues>(k: K, v: InvoiceFormValues[K]) =>
+  const set = <K extends keyof InvoiceFormValues>(k: K, v: InvoiceFormValues[K]) => {
     setValues((s) => ({ ...s, [k]: v }))
+    if (k in autofill) setAutofill((a) => ({ ...a, [k]: undefined }))
+  }
+
+  /** Apply a Textract proposal. Only empty fields are filled; typed values are never overwritten. */
+  function applyExtraction(result: ExtractionResponse): number {
+    const proposals: [AutofillField, string | null, number | null][] = [
+      ['invoice_number', result.invoice_number.value, result.invoice_number.confidence],
+      ['buyer_name', result.buyer_name.value, result.buyer_name.confidence],
+      ['invoice_date', result.invoice_date.value, result.invoice_date.confidence],
+      ['amount', result.amount.value, result.amount.confidence],
+    ]
+    let filled = 0
+    const nextValues = { ...latest.current.values }
+    const nextAutofill = { ...latest.current.autofill }
+    for (const [field, value, confidence] of proposals) {
+      if (value === null || nextValues[field].trim()) continue
+      nextValues[field] = value
+      nextAutofill[field] = confidence ?? 0
+      filled += 1
+    }
+    setValues(nextValues)
+    setAutofill(nextAutofill)
+    setErrors({})
+    return filled
+  }
+
+  const marker = (field: AutofillField) =>
+    autofill[field] !== undefined ? <AutofillMarker confidence={autofill[field]!} /> : undefined
 
   async function onSubmit(ev: FormEvent) {
     ev.preventDefault()
@@ -62,8 +104,12 @@ export default function NewInvoicePage() {
         days from acceptance.
       </p>
 
-      <form onSubmit={onSubmit} noValidate className="mt-10 space-y-6">
-        <Field label="Invoice number" name="invoice_number" error={errors.invoice_number}>
+      <div className="mt-10">
+        <UploadZone onExtracted={applyExtraction} />
+      </div>
+
+      <form onSubmit={onSubmit} noValidate className="space-y-6">
+        <Field label="Invoice number" name="invoice_number" error={errors.invoice_number} marker={marker('invoice_number')}>
           <TextInput
             id="invoice_number"
             value={values.invoice_number}
@@ -74,7 +120,7 @@ export default function NewInvoicePage() {
           />
         </Field>
 
-        <Field label="Buyer name" name="buyer_name" error={errors.buyer_name}>
+        <Field label="Buyer name" name="buyer_name" error={errors.buyer_name} marker={marker('buyer_name')}>
           <TextInput
             id="buyer_name"
             value={values.buyer_name}
@@ -110,7 +156,7 @@ export default function NewInvoicePage() {
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2">
-          <Field label="Invoice date" name="invoice_date" error={errors.invoice_date}>
+          <Field label="Invoice date" name="invoice_date" error={errors.invoice_date} marker={marker('invoice_date')}>
             <TextInput
               id="invoice_date"
               type="date"
@@ -124,7 +170,8 @@ export default function NewInvoicePage() {
             label="Date of acceptance"
             name="acceptance_date"
             error={errors.acceptance_date}
-            hint="When the buyer accepted the goods or services."
+            hint="When the buyer accepted the goods or services. This starts the statutory clock, so it is never read from the document — you decide it."
+            marker={<span className="font-mono text-[11px] tracking-[0.08em] text-mute">your determination</span>}
           >
             <TextInput
               id="acceptance_date"
@@ -149,7 +196,7 @@ export default function NewInvoicePage() {
               className="font-mono"
             />
           </Field>
-          <Field label="Amount (₹)" name="amount" error={errors.amount}>
+          <Field label="Amount (₹)" name="amount" error={errors.amount} marker={marker('amount')}>
             <TextInput
               id="amount"
               inputMode="decimal"

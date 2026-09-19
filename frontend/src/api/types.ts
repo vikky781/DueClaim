@@ -83,3 +83,29 @@ export interface PortfolioSummary {
   per_buyer: BuyerSummary[]
   disclaimer: string
 }
+
+/* ---- OCR accelerator ---- */
+
+export interface PresignResponse {
+  url: string
+  key: string
+  headers: Record<string, string>
+  expires_in: number
+}
+
+/** A proposed value. `value` is null when Textract's text could not be parsed unambiguously. */
+export interface ExtractedField {
+  value: string | null
+  confidence: number | null
+  raw: string | null
+  source: string | null
+}
+
+export interface ExtractionResponse {
+  key: string
+  invoice_number: ExtractedField
+  invoice_date: ExtractedField
+  buyer_name: ExtractedField
+  amount: ExtractedField
+  fields_seen: string[]
+}

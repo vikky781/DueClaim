@@ -55,14 +55,16 @@ interface FieldProps {
   hint?: string
   children: ReactNode
   optional?: boolean
+  /** Right-hand annotation, e.g. an auto-fill confidence marker. Replaces the "optional" tag. */
+  marker?: ReactNode
 }
 
-export function Field({ label, name, error, hint, optional, children }: FieldProps) {
+export function Field({ label, name, error, hint, optional, marker, children }: FieldProps) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={name} className="flex items-baseline justify-between text-[13px] text-mute">
+      <label htmlFor={name} className="flex items-baseline justify-between gap-3 text-[13px] text-mute">
         <span>{label}</span>
-        {optional && <span className="font-mono text-[11px] uppercase tracking-[0.14em]">optional</span>}
+        {marker ?? (optional && <span className="font-mono text-[11px] uppercase tracking-[0.14em]">optional</span>)}
       </label>
       {children}
       {error ? (
@@ -139,4 +141,17 @@ export function DisclaimerFooter() {
   return (
     <footer className="mt-16 border-t border-rule pt-6 text-[13px] leading-relaxed text-mute">{DISCLAIMER}</footer>
   )
+}
+
+/** Marker shown beside an auto-filled field. Under 80% confidence it asks the user to check. */
+export function AutofillMarker({ confidence }: { confidence: number }) {
+  const pct = Math.round(confidence)
+  if (confidence < 80) {
+    return (
+      <span className="font-mono text-[11px] tracking-[0.08em] text-brass">
+        ▲ check this · {pct}%
+      </span>
+    )
+  }
+  return <span className="font-mono text-[11px] tracking-[0.08em] text-mute">auto-filled · {pct}%</span>
 }

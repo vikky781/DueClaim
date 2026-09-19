@@ -11,6 +11,7 @@ from mangum import Mangum
 from dueclaim.rates import BankRateUnavailableError
 
 from .routes.invoices import router as invoices_router
+from .routes.uploads import router as uploads_router
 
 if os.environ.get("DEV_USER_SUB") and os.environ.get("ENVIRONMENT", "").lower() == "prod":
     # Fail at import (cold start) rather than at the first request.
@@ -18,6 +19,7 @@ if os.environ.get("DEV_USER_SUB") and os.environ.get("ENVIRONMENT", "").lower() 
 
 app = FastAPI(title="DueClaim API", version="0.1.0")
 app.include_router(invoices_router)
+app.include_router(uploads_router)
 
 
 @app.exception_handler(BankRateUnavailableError)

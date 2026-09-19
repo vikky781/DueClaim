@@ -89,6 +89,36 @@ Resources:
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
 
+  # --- Uploads (OCR accelerator) ---------------------------------------------
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub dueclaim-uploads-${Environment}-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-uploads
+            Status: Enabled
+            ExpirationInDays: 7
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      # Browsers PUT directly to a presigned URL, so the bucket must answer preflight.
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods: [PUT]
+            AllowedOrigins: ["*"]
+            AllowedHeaders: ["*"]
+            ExposedHeaders: [ETag]
+            MaxAge: 600
+
   # --- API --------------------------------------------------------------------
   HttpApi:
     Type: AWS::Serverless::HttpApi
@@ -119,9 +149,17 @@ Resources:
         Variables:
           ENVIRONMENT: !Ref Environment
           TABLE_NAME: !Ref Table
+          UPLOAD_BUCKET: !Ref UploadBucket
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref Table
+        - Statement:
+            - Effect: Allow
+              Action: [s3:PutObject, s3:GetObject]
+              Resource: !Sub ${UploadBucket.Arn}/uploads/*
+            - Effect: Allow
+              Action: textract:AnalyzeExpense
+              Resource: "*"
       Events:
         Health:
           Type: HttpApi
@@ -170,3 +208,5 @@ Outputs:
     Value: !Ref UserPoolClient
   TableName:
     Value: !Ref Table
+  UploadBucketName:
+    Value: !Ref UploadBucket

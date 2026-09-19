@@ -8,7 +8,16 @@
 
 import { fetchAuthSession } from 'aws-amplify/auth'
 
-import type { Business, InvoiceCreate, InvoiceDetail, InvoiceRead, InvoiceStatus, PortfolioSummary } from './types'
+import type {
+  Business,
+  ExtractionResponse,
+  InvoiceCreate,
+  InvoiceDetail,
+  InvoiceRead,
+  InvoiceStatus,
+  PortfolioSummary,
+  PresignResponse,
+} from './types'
 
 export const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '')
 
@@ -55,7 +64,7 @@ function messageFor(status: number, detail: unknown): string {
   return `The API answered ${status}.`
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   if (!API_URL) throw new ApiError('config', 'VITE_API_URL is not set.')
   const token = await idToken()
 
@@ -68,8 +77,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal,
     })
   } catch (err) {
+    if (signal?.aborted) throw new ApiError('network', 'The request took too long and was cancelled.', null, err)
     throw new ApiError('network', `Couldn't reach the API at ${API_URL}.`, null, err)
   }
 
@@ -127,4 +138,22 @@ export const api = {
 
   portfolioSummary: (asOf?: string) =>
     request<PortfolioSummary>('GET', `/api/v1/portfolio/summary${q({ as_of: asOf })}`),
+
+  /* ---- OCR accelerator: presign -> PUT to S3 -> extract ---- */
+  presignUpload: (contentType: string, filename?: string) =>
+    request<PresignResponse>('POST', '/api/v1/uploads/presign', { content_type: contentType, filename }),
+
+  /** Direct-to-S3 PUT using the presigned URL. No bearer token: the URL is the credential. */
+  async uploadToS3(presign: PresignResponse, file: Blob, signal?: AbortSignal): Promise<void> {
+    let res: Response
+    try {
+      res = await fetch(presign.url, { method: 'PUT', headers: presign.headers, body: file, signal })
+    } catch (err) {
+      throw new ApiError('network', 'The upload to storage failed before it completed.', null, err)
+    }
+    if (!res.ok) throw new ApiError('server', `Storage refused the upload (${res.status}).`, res.status)
+  },
+
+  extractUpload: (key: string, signal?: AbortSignal) =>
+    request<ExtractionResponse>('POST', `/api/v1/uploads/${key}/extract`, undefined, signal),
 }
