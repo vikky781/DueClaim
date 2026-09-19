@@ -54,7 +54,15 @@ export default function InvoiceDetailPage() {
   }
 
   if (state.status === 'loading') return <Loading label="Computing interest" />
-  if (state.status === 'error') return <ErrorNote error={state.error} />
+  if (state.status === 'error')
+    return (
+      <div className="max-w-xl space-y-4">
+        <ErrorNote error={state.error} onRetry={() => window.location.reload()} />
+        <Link to="/dashboard" className="inline-block text-[14px] text-brass hover:text-paper">
+          ← Back to the dashboard
+        </Link>
+      </div>
+    )
 
   const inv = state.invoice
   const { claim, breakdown } = inv
@@ -80,13 +88,13 @@ export default function InvoiceDetailPage() {
         </div>
         <div className="ml-auto text-right">
           <Eyebrow>Recoverable · {fmtDate(claim.as_of)}</Eyebrow>
-          <p className="font-display mt-1 text-4xl tabular-nums text-paper sm:text-5xl">
+          <p className="font-display mt-1 text-4xl tabular-nums text-paper sm:text-5xl xl:text-6xl">
             <Money value={claim.total_recoverable} display />
           </p>
         </div>
       </header>
 
-      <dl className="mt-10 grid grid-cols-2 gap-x-8 gap-y-5 text-[15px] sm:grid-cols-4">
+      <dl className="mt-10 grid grid-cols-2 gap-x-8 gap-y-5 text-base sm:grid-cols-4 xl:text-[17px]">
         <Fact label="Invoice amount">
           <Money value={inv.amount} />
         </Fact>
@@ -133,7 +141,7 @@ export default function InvoiceDetailPage() {
           </p>
         ) : (
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[720px] border-collapse font-mono text-[13px] tabular-nums">
+            <table className="w-full min-w-[720px] border-collapse font-mono text-[13px] tabular-nums xl:text-[15px]">
               <thead>
                 <tr className="border-b border-rule text-[11px] uppercase tracking-[0.14em] text-mute">
                   <Th align="left">From</Th>

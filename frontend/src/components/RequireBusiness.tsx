@@ -28,8 +28,8 @@ export function BusinessProvider() {
 
   const setBusiness = useCallback((business: Business) => setState({ status: 'ready', business }), [])
 
-  if (state.status === 'loading') return <Loading label="Loading your profile" />
-  if (state.status === 'error') return <ErrorNote error={state.error} />
+  if (state.status === 'loading') return <Loading label="Loading your business profile" />
+  if (state.status === 'error') return <ErrorNote error={state.error} onRetry={() => window.location.reload()} />
 
   return (
     <BusinessContext.Provider value={{ business: state.business, setBusiness }}>

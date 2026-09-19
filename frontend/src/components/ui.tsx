@@ -100,19 +100,51 @@ export function Checkbox({ label, ...rest }: InputHTMLAttributes<HTMLInputElemen
 
 /* ---------- status & feedback ---------- */
 
-export function ErrorNote({ error }: { error: unknown }) {
+/** Headline + next step for each failure kind. The server's own message is shown underneath, never alone. */
+function describe(error: unknown): { headline: string; next: string; detail?: string } {
+  if (error instanceof ApiError) {
+    switch (error.kind) {
+      case 'config':
+        return { headline: 'The app is not configured.', next: error.message }
+      case 'network':
+        return {
+          headline: 'Can’t reach the DueClaim API.',
+          next: 'Check your connection. If it persists, the backend may be down.',
+          detail: error.message,
+        }
+      case 'auth':
+        return { headline: 'Your session has expired.', next: 'Sign out and sign in again to continue.' }
+      case 'not_found':
+        return {
+          headline: 'That isn’t in your account.',
+          next: 'It may have been deleted, or the link is from another account.',
+        }
+      case 'validation':
+        return { headline: 'Some details were not accepted.', next: error.message }
+      case 'server':
+        return { headline: 'Something went wrong on our side.', next: 'Try again in a moment.', detail: error.message }
+    }
+  }
+  return {
+    headline: 'Something went wrong.',
+    next: 'Try again in a moment.',
+    detail: error instanceof Error ? error.message : String(error),
+  }
+}
+
+export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   if (!error) return null
-  const message = error instanceof Error ? error.message : String(error)
-  const hint =
-    error instanceof ApiError && error.kind === 'network'
-      ? 'Check your connection, or that the backend stack is deployed.'
-      : error instanceof ApiError && error.kind === 'auth'
-        ? 'Sign out and back in.'
-        : null
+  const { headline, next, detail } = describe(error)
   return (
     <div role="alert" className="rounded-md border border-alert/40 bg-slate px-4 py-3 text-[14px]">
-      <p className="text-alert">{message}</p>
-      {hint && <p className="mt-1 text-mute">{hint}</p>}
+      <p className="text-alert">{headline}</p>
+      <p className="mt-1 text-paper">{next}</p>
+      {detail && detail !== next && <p className="mt-1 font-mono text-[12px] text-mute">{detail}</p>}
+      {onRetry && (
+        <button type="button" onClick={onRetry} className="mt-3 text-[14px] text-brass hover:text-paper">
+          Try again
+        </button>
+      )}
     </div>
   )
 }

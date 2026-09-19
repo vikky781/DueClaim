@@ -11,7 +11,7 @@ export default function Layout() {
   const email = user?.signInDetails?.loginId
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col px-6 py-8 sm:px-8">
+    <div className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col px-6 py-8 sm:px-8 xl:max-w-6xl xl:py-10">
       <header className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-3 border-b border-rule pb-5">
         <NavLink to="/dashboard" className="font-display text-xl font-medium tracking-tight text-paper">
           DueClaim
