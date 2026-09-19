@@ -84,6 +84,11 @@ export default function DashboardPage() {
           </Eyebrow>
           <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-mute">
             {summary.overdue_count} of {summary.invoice_count} overdue
+            {summary.notices_generated > 0 && (
+              <>
+                {' '}· {summary.notices_generated} notice{summary.notices_generated === 1 ? '' : 's'} sent
+              </>
+            )}
           </span>
         </div>
         <div className="mt-2 hidden justify-end gap-8 font-mono text-[11px] uppercase tracking-[0.14em] text-mute sm:flex">

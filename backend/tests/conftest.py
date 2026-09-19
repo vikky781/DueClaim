@@ -121,10 +121,19 @@ class FakeUploads:
         self.responses: dict[str, dict] = {}
         self.missing: set[str] = set()
         self.unsupported: set[str] = set()
+        self.objects: list[tuple[str, str, bytes]] = []
+        self.presigned_gets: list[tuple[str, int]] = []
 
     def presign_put(self, key: str, content_type: str, expires_in: int) -> str:
         self.presigned.append((key, content_type))
         return f"https://fake-bucket.s3.ap-south-1.amazonaws.com/{key}?X-Amz-Signature=fake"
+
+    def put_object(self, key: str, data: bytes, content_type: str) -> None:
+        self.objects.append((key, content_type, data))
+
+    def presign_get(self, key: str, expires_in: int) -> str:
+        self.presigned_gets.append((key, expires_in))
+        return f"https://fake-bucket.s3.ap-south-1.amazonaws.com/{key}?X-Amz-Signature=fake-get"
 
     def analyze_expense(self, key: str) -> dict:
         from app.routes.uploads import ObjectMissing, UnsupportedDocument

@@ -58,6 +58,15 @@ class RestPeriodRead(BaseModel):
     is_capitalised: bool
 
 
+class NoticeRecordRead(BaseModel):
+    key: str
+    generated_at: datetime
+    as_of: date
+    principal_outstanding: str
+    total_interest: str
+    total_recoverable: str
+
+
 class InvoiceRead(BaseModel):
     id: str
     invoice_number: str
@@ -72,6 +81,7 @@ class InvoiceRead(BaseModel):
     status: InvoiceStatus
     created_at: datetime
     claim: ClaimSummary
+    notices: list[NoticeRecordRead]
 
 
 class InvoiceDetail(InvoiceRead):
@@ -94,6 +104,7 @@ class PortfolioSummary(BaseModel):
     interest_accruing_per_day: str
     invoice_count: int
     overdue_count: int
+    notices_generated: int
     per_buyer: list[BuyerSummary]
     disclaimer: str
 
@@ -137,9 +148,20 @@ def _row(p: RestPeriod) -> RestPeriodRead:
 
 def _invoice_fields(inv: Invoice) -> dict:
     return {
-        **inv.model_dump(exclude={"amount", "amount_paid"}),
+        **inv.model_dump(exclude={"amount", "amount_paid", "notices"}),
         "amount": money(inv.amount),
         "amount_paid": money(inv.amount_paid),
+        "notices": [
+            NoticeRecordRead(
+                key=n.key,
+                generated_at=n.generated_at,
+                as_of=n.as_of,
+                principal_outstanding=money(n.principal_outstanding),
+                total_interest=money(n.total_interest),
+                total_recoverable=money(n.total_recoverable),
+            )
+            for n in inv.notices
+        ],
     }
 
 
@@ -332,6 +354,7 @@ def portfolio_summary(
         interest_accruing_per_day=money(recoverable_tomorrow - recoverable_today),
         invoice_count=len(invoices),
         overdue_count=overdue,
+        notices_generated=sum(len(i.notices) for i in invoices),
         per_buyer=[
             BuyerSummary(
                 buyer_name=b["buyer_name"],

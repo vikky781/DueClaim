@@ -15,6 +15,7 @@ import type {
   InvoiceDetail,
   InvoiceRead,
   InvoiceStatus,
+  NoticeResponse,
   PortfolioSummary,
   PresignResponse,
 } from './types'
@@ -135,6 +136,10 @@ export const api = {
   patchInvoice: (id: string, patch: { amount_paid?: string; status?: InvoiceStatus }) =>
     request<InvoiceRead>('PATCH', `/api/v1/invoices/${encodeURIComponent(id)}`, patch),
   deleteInvoice: (id: string) => request<void>('DELETE', `/api/v1/invoices/${encodeURIComponent(id)}`),
+
+  /** Generate the statutory demand notice PDF; returns a 1-hour presigned URL plus the figures used. */
+  generateNotice: (id: string, asOf?: string) =>
+    request<NoticeResponse>('POST', `/api/v1/invoices/${encodeURIComponent(id)}/notice${q({ as_of: asOf })}`),
 
   portfolioSummary: (asOf?: string) =>
     request<PortfolioSummary>('GET', `/api/v1/portfolio/summary${q({ as_of: asOf })}`),

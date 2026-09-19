@@ -62,9 +62,24 @@ class InvoiceCreate(BaseModel):
         return self
 
 
+class NoticeRecord(BaseModel):
+    """A demand notice that was generated: what was demanded, as of when, and where the PDF lives.
+
+    This is a log of what was sent, not a cached claim; live figures are always recomputed.
+    """
+
+    key: str
+    generated_at: datetime
+    as_of: date
+    principal_outstanding: Decimal
+    total_interest: Decimal
+    total_recoverable: Decimal
+
+
 class Invoice(InvoiceCreate):
     id: str
     created_at: datetime
+    notices: list[NoticeRecord] = Field(default_factory=list)
 
 
 class InvoicePatch(BaseModel):

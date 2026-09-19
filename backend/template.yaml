@@ -156,7 +156,9 @@ Resources:
         - Statement:
             - Effect: Allow
               Action: [s3:PutObject, s3:GetObject]
-              Resource: !Sub ${UploadBucket.Arn}/uploads/*
+              Resource:
+                - !Sub ${UploadBucket.Arn}/uploads/*
+                - !Sub ${UploadBucket.Arn}/notices/*
             - Effect: Allow
               Action: textract:AnalyzeExpense
               Resource: "*"

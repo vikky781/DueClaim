@@ -52,20 +52,26 @@ def _invoice_sk(invoice_id: str) -> str:
     return f"INV#{invoice_id}"
 
 
+def _plain(value: Any) -> Any:
+    """Recursively convert a model dump into DynamoDB-storable values.
+
+    Decimal stays Decimal (boto3 serialises it exactly); dates/datetimes become
+    ISO strings; enums become their value; None is dropped from dicts.
+    """
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {k: _plain(v) for k, v in value.items() if v is not None}
+    if isinstance(value, (list, tuple)):
+        return [_plain(v) for v in value]
+    return value
+
+
 def _to_item(model: Any) -> dict[str, Any]:
-    """Model -> DynamoDB attribute dict. Decimal stays Decimal; dates become ISO strings."""
-    out: dict[str, Any] = {}
-    for key, value in model.__dict__.items():
-        if value is None:
-            continue  # DynamoDB has no useful null semantics for optional fields
-        if isinstance(value, Enum):
-            value = value.value
-        elif isinstance(value, (date, datetime)):
-            value = value.isoformat()
-        elif isinstance(value, Decimal):
-            pass
-        out[key] = value
-    return out
+    """Model -> DynamoDB attribute dict, nested models included."""
+    return _plain(model.model_dump(mode="python"))
 
 
 _INVOICE_FIELDS = set(Invoice.model_fields)

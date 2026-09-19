@@ -33,6 +33,16 @@ export interface ClaimSummary {
   total_recoverable: string
 }
 
+/** A demand notice that was generated for an invoice: what was demanded, as of when. */
+export interface NoticeRecord {
+  key: string
+  generated_at: string
+  as_of: string
+  principal_outstanding: string
+  total_interest: string
+  total_recoverable: string
+}
+
 export interface InvoiceRead {
   id: string
   invoice_number: string
@@ -47,6 +57,7 @@ export interface InvoiceRead {
   status: InvoiceStatus
   created_at: string
   claim: ClaimSummary
+  notices: NoticeRecord[]
 }
 
 export interface RestPeriodRead {
@@ -80,6 +91,7 @@ export interface PortfolioSummary {
   interest_accruing_per_day: string
   invoice_count: number
   overdue_count: number
+  notices_generated: number
   per_buyer: BuyerSummary[]
   disclaimer: string
 }
@@ -108,4 +120,18 @@ export interface ExtractionResponse {
   buyer_name: ExtractedField
   amount: ExtractedField
   fields_seen: string[]
+}
+
+export interface NoticeResponse {
+  url: string
+  key: string
+  expires_in: number
+  generated_at: string
+  as_of: string
+  appointed_day: string
+  days_overdue: number
+  principal_outstanding: string
+  total_interest: string
+  total_recoverable: string
+  notices_generated: number
 }

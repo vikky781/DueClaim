@@ -2,7 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { api } from '../api/client'
-import type { InvoiceDetail } from '../api/types'
+import type { InvoiceDetail, NoticeResponse } from '../api/types'
+import NoticePanel from '../components/NoticePanel'
 import { Badge43BH, ErrorNote, Eyebrow, Loading, Money } from '../components/ui'
 import { fmtDate } from '../lib/text'
 
@@ -27,6 +28,30 @@ export default function InvoiceDetailPage() {
       alive = false
     }
   }, [id])
+
+  function onGenerated(result: NoticeResponse) {
+    setLoaded((prev) =>
+      prev.status === 'ready' && prev.id === id
+        ? {
+            ...prev,
+            invoice: {
+              ...prev.invoice,
+              notices: [
+                ...prev.invoice.notices,
+                {
+                  key: result.key,
+                  generated_at: result.generated_at,
+                  as_of: result.as_of,
+                  principal_outstanding: result.principal_outstanding,
+                  total_interest: result.total_interest,
+                  total_recoverable: result.total_recoverable,
+                },
+              ],
+            },
+          }
+        : prev,
+    )
+  }
 
   if (state.status === 'loading') return <Loading label="Computing interest" />
   if (state.status === 'error') return <ErrorNote error={state.error} />
@@ -84,6 +109,8 @@ export default function InvoiceDetailPage() {
           {claim.days_overdue > 0 ? `${claim.days_overdue} days` : 'Not yet due'}
         </Fact>
       </dl>
+
+      <NoticePanel invoiceId={inv.id} buyerName={inv.buyer_name} history={inv.notices} onGenerated={onGenerated} />
 
       {/* ---- Breakdown ---- */}
       <section aria-labelledby="breakdown-heading" className="mt-16">

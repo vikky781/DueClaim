@@ -108,3 +108,23 @@ def test_business_round_trip_and_key_layout(table_and_store):
     assert store.get_business("sub-1") == biz
     item = table.get_item(Key={"PK": "USER#sub-1", "SK": "BUSINESS"})["Item"]
     assert item["udyam_number"] == "UDYAM-MH-18-0012345"
+
+
+def test_invoice_with_notice_records_round_trips(table_and_store):
+    from app.models import NoticeRecord
+
+    _, store = table_and_store
+    rec = NoticeRecord(
+        key="notices/sub-1/inv-0001-20260919T101500Z.pdf",
+        generated_at=datetime(2026, 9, 19, 10, 15, tzinfo=timezone.utc),
+        as_of=date(2026, 9, 19),
+        principal_outstanding=Decimal("500000.00"),
+        total_interest=Decimal("47476.11"),
+        total_recoverable=Decimal("547476.11"),
+    )
+    original = make_invoice().model_copy(update={"notices": [rec]})
+    store.put_invoice("sub-1", original)
+    got = store.get_invoice("sub-1", "inv-0001")
+    assert got == original
+    assert isinstance(got.notices[0].total_recoverable, Decimal)
+    assert got.notices[0].total_recoverable == Decimal("547476.11")

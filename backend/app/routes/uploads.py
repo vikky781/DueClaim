@@ -41,6 +41,8 @@ class UnsupportedDocument(Exception):
 class UploadsBackend(Protocol):
     def presign_put(self, key: str, content_type: str, expires_in: int) -> str: ...
     def analyze_expense(self, key: str) -> dict[str, Any]: ...
+    def put_object(self, key: str, data: bytes, content_type: str) -> None: ...
+    def presign_get(self, key: str, expires_in: int) -> str: ...
 
 
 class AwsUploads:
@@ -61,6 +63,16 @@ class AwsUploads:
             Params={"Bucket": self._bucket, "Key": key, "ContentType": content_type},
             ExpiresIn=expires_in,
             HttpMethod="PUT",
+        )
+
+    def put_object(self, key: str, data: bytes, content_type: str) -> None:
+        self._s3.put_object(Bucket=self._bucket, Key=key, Body=data, ContentType=content_type)
+
+    def presign_get(self, key: str, expires_in: int) -> str:
+        return self._s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self._bucket, "Key": key, "ResponseContentDisposition": "inline"},
+            ExpiresIn=expires_in,
         )
 
     def analyze_expense(self, key: str) -> dict[str, Any]:
